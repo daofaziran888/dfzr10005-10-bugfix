@@ -12,6 +12,28 @@ ACTION_RULES = {"启用监控": "草稿", "处理告警": "监控中", "关闭�
 NEGATIVE_ACTIONS = []
 
 
+def record_risk_conclusion(receipt: dict[str, Any]) -> None:
+    """旁路同步：节点动作的风险重算结论写入监控对象匹配的 SLA 规则。
+
+    归档（撤销节点）后关联风险随之撤销，重新启动（恢复）后风险重新挂载，
+    SLA 规则清单读取到的始终是最近一次重算结论。
+    """
+    node_code = str(receipt.get("节点编号", ""))
+    conclusion = str(receipt.get("SLA风险重算结论", ""))
+    for row in store.rows(MODULE):
+        if node_code not in str(row.get("监控对象", "")):
+            continue
+        row["规则状态"] = conclusion
+        row.setdefault("风险重算记录", []).append(
+            {
+                "回执编号": receipt.get("回执编号"),
+                "节点编号": node_code,
+                "结论": conclusion,
+                "时间": receipt.get("时间"),
+            }
+        )
+
+
 class SlaService:
     def list_entries(
         self,
